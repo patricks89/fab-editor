@@ -1,0 +1,193 @@
+<script type="text/javascript">
+    function addArea(value = "") {
+      const container = document.getElementById("node-input-areas-list");
+      const wrapper = document.createElement("div");
+      wrapper.className = "area-item";
+      wrapper.style = "display:flex; align-items:center; gap:6px; margin-bottom:4px;";
+  
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = value;
+      input.className = "node-input-area-item";
+      input.placeholder = "Bereich z.B. News";
+  
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.innerText = "–";
+      delBtn.onclick = () => container.removeChild(wrapper);
+  
+      wrapper.appendChild(input);
+      wrapper.appendChild(delBtn);
+      container.appendChild(wrapper);
+    }
+  
+    function addFormat(type, value = "") {
+      const container = document.getElementById(`node-input-${type}-list`);
+      const wrapper = document.createElement("div");
+      wrapper.className = "format-item";
+      wrapper.style = "display:flex; align-items:center; gap:6px; margin-bottom:4px;";
+  
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = value;
+      input.className = `node-input-${type}-item`;
+      input.placeholder = type === "textFormats" ? "z.B. srt" : "z.B. mp4";
+  
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.innerText = "–";
+      delBtn.onclick = () => container.removeChild(wrapper);
+  
+      wrapper.appendChild(input);
+      wrapper.appendChild(delBtn);
+      container.appendChild(wrapper);
+    }
+  
+    RED.nodes.registerType('fab-editor', {
+      category: 'function',
+      color: '#a6bbcf',
+      inputs: 1,
+      inputLabels: ["(optional) Input msg"],
+      outputs: 1,
+      outputLabels: ["(Export or pass-through)"],
+      icon: "file.svg",
+      defaults: {
+        name: { value: "" },
+        port: { value: 7007 },
+        enableLock: { value: true },
+        areas: { value: '["News","Wetter","Sport"]', required: false },
+        useAreaDir: { value: true },
+        textFormats: { value: '["srt","ass"]', required: false },
+        mediaFormats: { value: '["mp3","mp4"]', required: false },
+        sourceDir: { value: "", required: false },
+        exportDir: { value: "", required: false },
+        tempDir: { value: "", required: false },
+        visibleRows: { value: 5 },
+        maxChars: { value: 36 }
+      },
+      label: function () {
+        return this.name || "fab-editor";
+      },
+      oneditprepare: function () {
+        // Bereiche
+        try {
+          const areas = JSON.parse($("#node-input-areas").val());
+          areas.forEach(a => addArea(a));
+        } catch (e) {}
+        $("#node-input-areas").hide();
+  
+        // Textformate
+        try {
+          const tf = JSON.parse($("#node-input-textFormats").val());
+          tf.forEach(f => addFormat("textFormats", f));
+        } catch (e) {}
+        $("#node-input-textFormats").hide();
+  
+        // Medienformate
+        try {
+          const mf = JSON.parse($("#node-input-mediaFormats").val());
+          mf.forEach(f => addFormat("mediaFormats", f));
+        } catch (e) {}
+        $("#node-input-mediaFormats").hide();
+      },
+      oneditsave: function () {
+        const areas = [];
+        $(".node-input-area-item").each(function () {
+          const val = $(this).val().trim();
+          if (val) areas.push(val);
+        });
+        $("#node-input-areas").val(JSON.stringify(areas));
+  
+        const tf = [];
+        $(".node-input-textFormats-item").each(function () {
+          const val = $(this).val().trim();
+          if (val) tf.push(val);
+        });
+        $("#node-input-textFormats").val(JSON.stringify(tf));
+  
+        const mf = [];
+        $(".node-input-mediaFormats-item").each(function () {
+          const val = $(this).val().trim();
+          if (val) mf.push(val);
+        });
+        $("#node-input-mediaFormats").val(JSON.stringify(mf));
+      }
+    });
+  </script>
+  
+  <script type="text/html" data-template-name="fab-editor">
+    <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Node Name">
+    </div>
+  
+    <div class="form-row">
+      <label for="node-input-port"><i class="fa fa-plug"></i> Port</label>
+      <input type="number" id="node-input-port" placeholder="7007">
+    </div>
+  
+    <div class="form-row">
+      <label for="node-input-visibleRows"><i class="fa fa-sort-numeric-up"></i> Sichtbare Zeilen</label>
+      <input type="number" id="node-input-visibleRows" placeholder="5">
+    </div>
+  
+    <div class="form-row">
+      <label for="node-input-maxChars"><i class="fa fa-font"></i> Max. Zeichen/Zeile</label>
+      <input type="number" id="node-input-maxChars" placeholder="36">
+    </div>
+  
+    <div class="form-row">
+      <label for="node-input-enableLock"><i class="fa fa-lock"></i> Locking aktivieren</label>
+      <input type="checkbox" id="node-input-enableLock" style="vertical-align:middle;">
+    </div>
+  
+    <!-- Bereiche -->
+    <div class="form-row">
+      <label><i class="fa fa-list"></i> Bereiche</label>
+      <div id="node-input-areas-list"></div>
+      <button type="button" onclick="addArea()">+ Hinzufügen</button>
+    </div>
+    <input type="hidden" id="node-input-areas">
+  
+    <!-- useAreaDir -->
+    <div class="form-row">
+      <label for="node-input-useAreaDir"><i class="fa fa-folder-open"></i> Bereiche in Verzeichnis?</label>
+      <input type="checkbox" id="node-input-useAreaDir" style="vertical-align:middle;">
+    </div>
+  
+    <!-- Textformate -->
+    <div class="form-row">
+      <label><i class="fa fa-file-text"></i> Text-Formate</label>
+      <div id="node-input-textFormats-list"></div>
+      <button type="button" onclick="addFormat('textFormats')">+ Hinzufügen</button>
+    </div>
+    <input type="hidden" id="node-input-textFormats">
+  
+    <!-- Medienformate -->
+    <div class="form-row">
+      <label><i class="fa fa-file-video-o"></i> Medien-Formate</label>
+      <div id="node-input-mediaFormats-list"></div>
+      <button type="button" onclick="addFormat('mediaFormats')">+ Hinzufügen</button>
+    </div>
+    <input type="hidden" id="node-input-mediaFormats">
+  
+    <div class="form-row">
+      <label for="node-input-sourceDir"><i class="fa fa-folder"></i> Quellverzeichnis</label>
+      <input type="text" id="node-input-sourceDir" placeholder="/home/user/source">
+    </div>
+  
+    <div class="form-row">
+      <label for="node-input-exportDir"><i class="fa fa-save"></i> Exportverzeichnis</label>
+      <input type="text" id="node-input-exportDir" placeholder="/home/user/export">
+    </div>
+  
+    <div class="form-row">
+      <label for="node-input-tempDir"><i class="fa fa-file"></i> Temp-Verzeichnis</label>
+      <input type="text" id="node-input-tempDir" placeholder="/home/user/temp">
+    </div>
+  </script>
+  
+  <script type="text/html" data-help-name="fab-editor">
+    <p>Dieses Node stellt einen umfangreichen Editor (SRT/ASS) inkl. Audio/Video, Force-Lock, Bereiche, Temp-Files und vollem Layout bereit.</p>
+  </script>
+  

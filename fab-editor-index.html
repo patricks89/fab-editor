@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Fab Editor - Table on Top, Video at Bottom</title>
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@vuetify/fontawesome5@0.0.1/css/fontawesome5.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.6.14/dist/vuetify.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.6.14/dist/vuetify.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+  <style>
+    html,
+    body,
+    #app {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #333;
+    }
+
+    .v-application--wrap {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Lock Overlay */
+    .locked-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      z-index: 9999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .locked-box {
+      background: #444;
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    /* Search & Replace Dialog */
+    .search-dialog .v-card {
+      background: #444;
+    }
+
+    /* Highlight row */
+    .current-row {
+      background: lightblue;
+    }
+
+    .editor-body {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .v-main,
+    .v-container {
+      flex: 1 1 auto;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .table-scroll {
+      flex: 0 0 auto;
+      max-height: 40%;
+      overflow: auto;
+      background: #444;
+      padding: 10px;
+      border-radius: 8px;
+      min-height: 0;
+    }
+
+
+    .dialogue-table {
+      table-layout: fixed;
+      width: 100%;
+      border-collapse: collapse;
+      background: #aaa;
+      font-size: 16px;
+    }
+
+    .dialogue-table th:nth-child(1),
+    .dialogue-table td:nth-child(1) {
+      width: 100px;
+      text-align: center;
+    }
+
+    .dialogue-table th:nth-child(2),
+    .dialogue-table td:nth-child(2),
+    .dialogue-table th:nth-child(4),
+    .dialogue-table td:nth-child(4) {
+      width: 120px;
+      text-align: center;
+      padding-left: 10px;
+    }
+
+    .dialogue-table th:nth-child(5),
+    .dialogue-table td:nth-child(5) {
+      width: 80px;
+      text-align: center;
+    }
+
+    .dialogue-table th:nth-child(6),
+    .dialogue-table td:nth-child(6) {
+      width: 100px;
+      text-align: center;
+    }
+
+    .dialogue-table th:nth-child(3),
+    .dialogue-table td:nth-child(3) {
+      width: auto;
+      padding-left: 10px;
+      padding-right: 10px;
+      /* nimmt restlichen Platz */
+    }
+
+
+    .subtitle-overlay {
+      position: absolute;
+      bottom: 30%;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .subtitle {
+      font-size: 20px;
+      text-align: center;
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 4px 8px;
+      border-radius: 4px;
+      max-width: 90%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+
+    .video-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.video-info-line {
+  display: flex;
+  justify-content: space-between;
+  color: white;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+.video-container {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.video-element {
+  max-width: 100%;
+  max-height: 50vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.video-controls {
+  text-align: center;
+  margin-top: 5px;
+}
+
+.video-section {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  overflow: hidden;
+  max-height: 55vh;
+  position: relative;
+  padding: 0 10px;
+}
+
+    /* scrollbar styling for table */
+    .table-scroll::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .table-scroll::-webkit-scrollbar-track {
+      background: #444;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <v-app dark style="display:flex; flex-direction:column; height:100%;">
+      <v-app-bar dense app>
+        <v-toolbar-title>Fab Editor - Table on Top, Video at Bottom</v-toolbar-title>
+      </v-app-bar>
+
+      <v-navigation-drawer app clipped-left width="80" permanent v-model="drawer">
+        <v-list dense>
+          <v-list-item link @click="activeStep=1">
+            <v-list-item-icon><v-icon>mdi-home</v-icon></v-list-item-icon>
+          </v-list-item>
+          <v-list-item link @click="activeStep=2">
+            <v-list-item-icon><v-icon>mdi-file-search</v-icon></v-list-item-icon>
+          </v-list-item>
+          <v-list-item link @click="activeStep=3">
+            <v-list-item-icon><v-icon>mdi-subtitle</v-icon></v-list-item-icon>
+          </v-list-item>
+          <v-list-item link @click="activeStep=4">
+            <v-list-item-icon><v-icon>mdi-check-decagram</v-icon></v-list-item-icon>
+          </v-list-item>
+        </v-list>
+      </v-navigation-drawer>
+
+      <v-main style="flex:1 1 auto; display:flex; flex-direction:column; overflow:hidden;">
+        <v-container fluid style="flex:1 1 auto; display:flex; flex-direction:column; overflow:hidden;">
+
+          <!-- Overlay: Lock Taken -->
+          <div v-if="showLockOverlay" class="locked-overlay">
+            <div class="locked-box">
+              <p>Datei <strong>{{ lockedFileName }}</strong> wurde von <strong>{{ lockedBy }}</strong> übernommen!</p>
+              <p>Lock zurückholen?</p>
+              <v-btn color="error" class="mr-2" @click="closeLockOverlay(false)">Nein</v-btn>
+              <v-btn color="success" @click="closeLockOverlay(true)">Ja!</v-btn>
+            </div>
+          </div>
+
+          <!-- Overlay: Search & Replace -->
+          <v-dialog v-model="searchOverlay" persistent max-width="400" class="search-dialog">
+            <v-card>
+              <v-card-title>Suchen & Ersetzen</v-card-title>
+              <v-card-text>
+                <v-text-field label="Suchtext" v-model="searchText"></v-text-field>
+                <v-text-field label="Ersetzen" v-model="replaceText"></v-text-field>
+              </v-card-text>
+              <v-card-actions>
+                <v-btn text @click="searchNext">Next</v-btn>
+                <v-btn text @click="replaceOne">Replace</v-btn>
+                <v-btn text @click="replaceAll">Replace All</v-btn>
+                <v-spacer></v-spacer>
+                <v-btn text color="error" @click="searchOverlay=false">Close</v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-dialog>
+
+          <!-- Steps -->
+          <div v-if="activeStep===1">
+            <h2>Willkommen in Table-Top / Video-Bottom Layout</h2>
+          </div>
+
+          <div v-else-if="activeStep===2">
+            <h2>Dateiliste</h2>
+            <div v-if="areas.length>0 && useAreaDir" class="mb-2">
+              <label>Bereich:</label>
+              <select v-model="selectedArea" @change="listFiles">
+                <option v-for="a in areas" :key="a" :value="a">{{ a }}</option>
+              </select>
+            </div>
+            <v-list two-line>
+              <v-list-item v-for="(f,ix) in fileList" :key="ix" @click="openFile(f)">
+                <v-list-item-icon>
+                  <v-icon v-if="f.locked">mdi-lock</v-icon>
+                  <v-icon v-else-if="mediaFormats.includes(f.ext)">mdi-file-video</v-icon>
+                  <v-icon>mdi-file</v-icon>
+                </v-list-item-icon>
+                <v-list-item-content>
+                  <v-list-item-title>{{ f.name }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    Created: {{ formatMs(f.creationDate) }}
+                  </v-list-item-subtitle>
+                </v-list-item-content>
+              </v-list-item>
+            </v-list>
+          </div>
+
+          <!-- Step 3: Editor -->
+          <div v-else-if="activeStep===3" class="editor-body">
+            <!-- Buttons etc. -->
+            <div
+              style="display:flex; justify-content:space-between; align-items:center; background:#333; padding:10px; border-radius:8px; margin-bottom:10px;">
+              <div>
+                <v-btn color="primary" class="mr-2" @click="searchOverlay=true">Suchen & Ersetzen</v-btn>
+                <v-btn color="success" @click="exportASS">Export</v-btn>
+              </div>
+              <div>
+                <v-btn color="error" @click="unlockFileManually">Unlock</v-btn>
+              </div>
+            </div>
+
+            <!-- TABLE SCROLL -->
+            <div class="table-scroll" :style="{ maxHeight: computedTableHeight }">
+              <table border="1" class="dialogue-table">
+                <thead>
+                  <tr>
+                    <th>Play</th>
+                    <th>Start</th>
+                    <th>Text</th>
+                    <th>End</th>
+                    <th>Chars</th>
+                    <th>Funktionen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(d,ix) in dialogues" :key="ix" :class="{ 'current-row': currentRowIndex===ix }"
+                    @click="highlightRow(ix)">
+                    <td>
+                      <v-btn @click.stop="togglePlayPause(ix)">{{ isPlaying && currentRowIndex===ix ? '❚❚':'▶'
+                        }}</v-btn>
+                    </td>
+                    <td><input style="width:100%;" v-model="d.Start" @click.stop></td>
+                    <td><textarea rows="2" style="width:100%;" v-model="d.Text" @click.stop></textarea></td>
+                    <td><input style="width:100%;" v-model="d.End" @click.stop></td>
+                    <td :style="getCharCountStyle(d)" v-html="getCharCount(d)"></td>
+                    <td>
+                      <v-btn icon small @click.stop="deleteRowElement(ix,d.Text)"><v-icon>mdi-delete</v-icon></v-btn>
+                      <v-btn icon small @click.stop="addRowElementAfter(ix)"><v-icon>mdi-plus</v-icon></v-btn>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- VIDEO / AUDIO BOTTOM -->
+            <div class="video-section" style="margin-top:10px;">
+
+              <!-- AUDIO -->
+              <div v-if="mediaType==='audio'" style="text-align:center;">
+                <div style="margin-bottom:10px;">
+                  <button @click="seekMedia(-10)">-10s</button>
+                  <button @click="seekMedia(-5)">-5s</button>
+                  <button @click="seekMedia(-1)">-1s</button>
+                  <button @click="playPause">{{ isPlaying?'❚❚':'▶' }}</button>
+                  <button @click="seekMedia(1)">+1s</button>
+                  <button @click="seekMedia(5)">+5s</button>
+                  <button @click="seekMedia(10)">+10s</button>
+                </div>
+                <audio ref="mediaPlayer" :src="mediaSrc" controls @timeupdate="updateCurrentRows" @play="handlePlay"
+                  @pause="handlePause" style="width:70%;"></audio>
+                <div style="margin-top:10px;">
+                  <label>Geschwindigkeit:</label>
+                  <select v-model="playbackRate" @change="changePlaybackRate">
+                    <option v-for="r in playbackRates" :value="r">{{ r }}x</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- VIDEO -->
+              <div v-if="mediaType==='video'" class="video-wrapper">
+                <!-- Zeitlinie Start & Ende -->
+                <div class="video-info-line">
+                  <span>Start: {{ currentStartTime }}</span>
+                  <span>Ende: {{ currentEndTime }}</span>
+                </div>
+              
+                <!-- VIDEO -->
+                <div class="video-container">
+                  <video ref="mediaPlayer" :src="mediaSrc" controls class="video-element"
+                    @timeupdate="updateCurrentRows" @play="handlePlay" @pause="handlePause"></video>
+                  <div class="subtitle-overlay">
+                    <div v-for="(d,idx) in currentSubtitles" :key="idx" class="subtitle" :style="getSubtitleStyle(idx,d)">
+                      {{ d.Text }}
+                    </div>
+                  </div>
+                </div>
+              
+                <!-- Buttons unten -->
+                <div class="video-controls">
+                  <button @click="seekMedia(-10)">-10s</button>
+                  <button @click="seekMedia(-5)">-5s</button>
+                  <button @click="seekMedia(-1)">-1s</button>
+                  <button @click="playPause">{{ isPlaying?'❚❚':'▶' }}</button>
+                  <button @click="seekMedia(1)">+1s</button>
+                  <button @click="seekMedia(5)">+5s</button>
+                  <button @click="seekMedia(10)">+10s</button>
+                  <span style="margin-left:20px;">
+                    <label>Geschwindigkeit:</label>
+                    <select v-model="playbackRate" @change="changePlaybackRate">
+                      <option v-for="r in playbackRates" :value="r">{{ r }}x</option>
+                    </select>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="activeStep===4">
+            <h2>Export / Logs</h2>
+          </div>
+
+        </v-container>
+      </v-main>
+    </v-app>
+  </div>
+
+  <script>
+    new Vue({
+      el: "#app",
+      vuetify: new Vuetify({ theme: { dark: true } }),
+      data() {
+        return {
+          drawer: true,
+          activeStep: 1,
+          socket: null,
+          linesVisible: 5,
+          maxChars: 36,
+
+          areas: [], useAreaDir: true, textFormats: [], mediaFormats: [],
+          selectedArea: "",
+          fileList: [],
+          currentFileName: "",
+
+          dialogues: [],
+          currentRowIndex: null,
+          currentRowIndices: [],
+          isPlaying: false,
+          currentStartTime: "",
+          currentEndTime: "",
+          playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+          playbackRate: 1,
+          currentSubtitles: [],
+          mediaSrc: "",
+          mediaType: "",
+
+          showLockOverlay: false,
+          lockedFileName: "",
+          lockedBy: "",
+
+          searchOverlay: false,
+          searchText: "",
+          replaceText: ""
+        }
+      },
+      computed: {
+        computedTableHeight() {
+          // Jede Zeile z.B. ~ 32px?
+          const rowHeight = 72;
+          return (this.linesVisible * rowHeight) + "px";
+        }
+      },
+      mounted() {
+        this.socket = io(location.origin);
+        this.socket.on("connect", () => console.log("Connected:", this.socket.id));
+        this.socket.on("config", (cfg) => {
+          this.areas = cfg.areas || [];
+          this.useAreaDir = cfg.useAreaDir;
+          this.textFormats = cfg.textFormats || [];
+          this.mediaFormats = cfg.mediaFormats || [];
+          this.linesVisible = cfg.linesVisible || 5;
+          this.maxChars = cfg.maxChars || 36;
+          if (this.areas.length > 0) this.selectedArea = this.areas[0];
+          this.listFiles();
+        });
+        this.socket.on("listFilesResult", (files) => this.fileList = files);
+        this.socket.on("loadFileResult", (res) => {
+          if (res.locked) {
+            if (confirm("Datei gesperrt. Lock übernehmen?")) {
+              this.forceLoad();
+            }
+          } else if (res.error) {
+            alert("Fehler: " + res.error);
+          } else {
+            this.parseSubtitles(res.content);
+            this.loadMatchingMedia();
+            this.activeStep = 3;
+          }
+        });
+        this.socket.on("exportFileResult", (r) => {
+          if (r.success) alert("Export OK => " + r.outPath);
+        });
+        this.socket.on("lockTaken", (info) => {
+          this.lockedFileName = info.fileName;
+          this.lockedBy = info.by;
+          this.showLockOverlay = true;
+        });
+
+        window.addEventListener("beforeunload", this.handleBeforeUnload);
+        window.addEventListener("keydown", this.handleKeyDown);
+      },
+      beforeDestroy() {
+        window.removeEventListener("beforeunload", this.handleBeforeUnload);
+        window.removeEventListener("keydown", this.handleKeyDown);
+      },
+      methods: {
+        formatMs(ms) {
+          if (!ms) return "";
+          let d = new Date(ms);
+          return d.toLocaleString();
+        },
+        listFiles() {
+          this.socket.emit("listFiles", { bereich: this.selectedArea });
+        },
+        openFile(f) {
+          this.currentFileName = f.name;
+          if (this.textFormats.includes(f.ext)) {
+            this.socket.emit("loadFile", { fileName: f.name, bereich: this.selectedArea, force: false });
+          } else if (this.mediaFormats.includes(f.ext)) {
+            // load media => check if there's matching srt
+            let base = f.name.replace(/\.[^/.]+$/, "");
+            let sub = this.fileList.find(x => {
+              let b2 = x.name.replace(/\.[^/.]+$/, "");
+              return b2 === base && this.textFormats.includes(x.ext);
+            });
+            if (sub) {
+              this.currentFileName = sub.name;
+              this.socket.emit("loadFile", { fileName: sub.name, bereich: this.selectedArea, force: false });
+            }
+            this.setMediaFile(f.name);
+            this.activeStep = 3;
+          }
+        },
+        forceLoad() {
+          if (!this.currentFileName) return;
+          this.socket.emit("loadFile", { fileName: this.currentFileName, bereich: this.selectedArea, force: true });
+        },
+        closeLockOverlay(force) {
+          this.showLockOverlay = false;
+          if (force) {
+            this.socket.emit("loadFile", { fileName: this.lockedFileName, bereich: this.selectedArea, force: true });
+          } else {
+            this.activeStep = 2;
+          }
+        },
+        handleBeforeUnload() {
+          this.unlockFileManually();
+        },
+        unlockFileManually() {
+          if (!this.currentFileName) return;
+          this.socket.emit("unlockFile", { fileName: this.currentFileName, bereich: this.selectedArea });
+        },
+        parseSubtitles(content) {
+          if (content.includes("Dialogue:")) this.parseASS(content);
+          else this.parseSRT(content);
+        },
+        parseSRT(content) {
+          this.dialogues = [];
+          let lines = content.split(/\r?\n/);
+          let i = 0;
+          while (i < lines.length) {
+            let line = lines[i].trim();
+            if (!isNaN(line)) {
+              i++;
+              let times = (lines[i] || "").trim(); i++;
+              let splitted = times.split("-->");
+              if (splitted.length === 2) {
+                let start = splitted[0].trim().replace(",", ".");
+                let end = splitted[1].trim().replace(",", ".");
+                let text = "";
+                while (i < lines.length && lines[i].trim() !== "") {
+                  text += lines[i] + "\n"; i++;
+                }
+                let d = {
+                  Layer: '0', Start: start, End: end,
+                  Style: 'Default', Name: '', MarginL: '0', MarginR: '0', MarginV: '0', Effect: '',
+                  Text: text.trim(), Position: ''
+                };
+                this.dialogues.push(d);
+              }
+            }
+            i++;
+          }
+        },
+        parseASS(content) {
+          this.dialogues = [];
+          let inEvents = false; let format = [];
+          let lines = content.split(/\r?\n/);
+          lines.forEach(l => {
+            let line = l.trim();
+            if (line.startsWith("[Events]")) { inEvents = true; return; }
+            if (!inEvents) return;
+            if (line.startsWith("Format:")) {
+              format = line.substring(7).split(",").map(x => x.trim());
+            } else if (line.startsWith("Dialogue:")) {
+              let rest = line.substring(9).trim();
+              let parts = []; let c = 0; let cur = "";
+              for (let i = 0; i < rest.length; i++) {
+                if (rest[i] === ',' && c < 9) { parts.push(cur); cur = ""; c++; }
+                else cur += rest[i];
+              }
+              parts.push(cur);
+              let obj = {};
+              for (let i = 0; i < format.length; i++) {
+                obj[format[i]] = parts[i] || "";
+              }
+              let text = (obj.Text || "").replace(/\\N/g, "\n");
+              this.dialogues.push({
+                Layer: obj.Layer || '0',
+                Start: obj.Start || '0:00:00.00',
+                End: obj.End || '0:00:05.00',
+                Style: obj.Style || 'Default',
+                Name: obj.Name || '',
+                MarginL: obj.MarginL || '0',
+                MarginR: obj.MarginR || '0',
+                MarginV: obj.MarginV || '0',
+                Effect: obj.Effect || '',
+                Text: text,
+                Position: ''
+              });
+            }
+          });
+        },
+        setMediaFile(filename) {
+          if (this.selectedArea) {
+            this.mediaSrc = `/files/${this.selectedArea}/${filename}`;
+          } else {
+            this.mediaSrc = `/files/${filename}`;
+          }
+          let ext = filename.split(".").pop().toLowerCase();
+          if (ext === "mp4") this.mediaType = "video";
+          else if (ext === "mp3" || ext === "wav") this.mediaType = "audio";
+          else this.mediaType = "";
+        },
+        loadMatchingMedia() {
+          let base = this.currentFileName.replace(/\.[^/.]+$/, "");
+          let media = this.fileList.find(x => {
+            let b2 = x.name.replace(/\.[^/.]+$/, "");
+            return b2 === base && this.mediaFormats.includes(x.ext);
+          });
+          if (media) this.setMediaFile(media.name);
+          else {
+            this.mediaSrc = ""; this.mediaType = "";
+          }
+        },
+        exportASS() {
+          if (!this.dialogues.length) {
+            alert("Keine Dialoge?");
+            return;
+          }
+          let out = "[Script Info]\nTitle: Demo\nScriptType: v4.00+\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,...\nStyle: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,1,1,2,40,40,20,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
+          this.dialogues.forEach(d => {
+            let text = d.Text.replace(/\n/g, "\\N");
+            out += "Dialogue: " + [
+              d.Layer || '0', d.Start || '0:00:00.00', d.End || '0:00:05.00',
+              d.Style || 'Default', d.Name || '',
+              d.MarginL || '0', d.MarginR || '0', d.MarginV || '0',
+              d.Effect || '',
+              text
+            ].join(",") + "\n";
+          });
+          let exportName = this.currentFileName.replace(/\.[^/.]+$/, "") + ".ass";
+          this.socket.emit("exportFile", { fileName: exportName, bereich: this.selectedArea, content: out });
+          this.unlockFileManually();
+        },
+        highlightRow(ix) {
+          this.currentRowIndex = ix;
+          this.jumpToTime(this.dialogues[ix].Start);
+          this.$nextTick(() => {
+            const rows = this.$el.querySelectorAll("tbody tr");
+            if (rows[ix]) {
+              rows[ix].scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+            }
+          });
+        },
+        togglePlayPause(ix) {
+          if (this.isPlaying && this.currentRowIndex === ix) {
+            let mp = this.$refs.mediaPlayer;
+            if (mp) mp.pause();
+            this.isPlaying = false;
+          } else {
+            this.currentRowIndex = ix;
+            this.jumpToTime(this.dialogues[ix].Start);
+            let mp = this.$refs.mediaPlayer;
+            if (mp) {
+              mp.play().then(() => this.isPlaying = true).catch(e => console.warn("autoplay blocked:", e));
+            }
+          }
+        },
+        jumpToTime(str) {
+          let parts = str.split(":");
+          if (parts.length !== 3) return;
+          let h = parseInt(parts[0], 10), m = parseInt(parts[1], 10), s = parseFloat(parts[2]);
+          let total = h * 3600 + m * 60 + s;
+          let mp = this.$refs.mediaPlayer;
+          if (mp) mp.currentTime = total;
+        },
+        handlePlay() { this.isPlaying = true; }
+        , handlePause() { this.isPlaying = false; }
+        , updateCurrentRows() {
+          let mp = this.$refs.mediaPlayer;
+          if (!mp) return;
+          let cur = mp.currentTime;
+          this.currentRowIndices = []; this.currentSubtitles = [];
+          this.dialogues.forEach((d, ix) => {
+            let st = this.timeToSec(d.Start), ed = this.timeToSec(d.End);
+            if (cur >= st && cur <= ed) {
+              this.currentRowIndices.push(ix);
+              this.currentSubtitles.push(d);
+              this.currentStartTime = d.Start; this.currentEndTime = d.End;
+            }
+          });
+          if (this.currentRowIndices.length > 0) {
+            this.currentRowIndex = this.currentRowIndices[0];
+            this.$nextTick(() => {
+              const rows = this.$el.querySelectorAll("tbody tr");
+              if (rows[this.currentRowIndex]) {
+                rows[this.currentRowIndex].scrollIntoView({ block: 'center', behavior: 'smooth' });
+              }
+            });
+          }
+        },
+        timeToSec(str) {
+          let p = str.split(":"); if (p.length !== 3) return 0;
+          let h = parseInt(p[0], 10), m = parseInt(p[1], 10), s = parseFloat(p[2]);
+          return isNaN(h) || isNaN(m) || isNaN(s) ? 0 : (h * 3600 + m * 60 + s);
+        },
+        seekMedia(sec) {
+          let mp = this.$refs.mediaPlayer;
+          if (mp) mp.currentTime += sec;
+        },
+        playPause() {
+          let mp = this.$refs.mediaPlayer;
+          if (!mp) return;
+          if (mp.paused) {
+            mp.play().then(() => this.isPlaying = true).catch(e => console.warn(e));
+          } else {
+            mp.pause(); this.isPlaying = false;
+          }
+        },
+        deleteRowElement(ix, text) {
+          if (confirm("Zeile '" + text + "' löschen?")) {
+            this.dialogues.splice(ix, 1);
+          }
+        },
+        addRowElementAfter(ix) {
+          let base = this.dialogues[ix];
+          let copy = { ...base, Text: "" };
+          this.dialogues.splice(ix + 1, 0, copy);
+        },
+        getCharCount(d) {
+          let lines = d.Text.split(/\r?\n|\n/);
+          if (lines.length > 1) {
+            return lines.map(l => l.length).join("<br>");
+          }
+          return d.Text.length.toString();
+        },
+        getCharCountStyle(d) {
+          let start = this.timeToSec(d.Start), end = this.timeToSec(d.End);
+          let duration = end - start; let c = d.Text.length;
+          if (c === 0) return {};
+          let dpc = duration / c;
+          let color = "#000000";
+          if (dpc <= 0.05) color = "#ff0000";
+          else if (dpc >= 0.1) color = "#0000ff";
+          else if (dpc > 0.05 && dpc < 0.075) {
+            let ratio = (dpc - 0.05) / (0.075 - 0.05);
+            color = this.interpolateColor("#ff0000", "#00ff00", ratio);
+          } else if (dpc >= 0.075 && dpc < 0.1) {
+            let ratio = (dpc - 0.075) / (0.1 - 0.075);
+            color = this.interpolateColor("#00ff00", "#0000ff", ratio);
+          }
+          let lines = d.Text.split(/\r?\n|\n/);
+          let borderLeft = "";
+          if (lines.length > 1) {
+            if (lines[0].length > this.maxChars || lines[1].length > this.maxChars) borderLeft = "5px solid red";
+          } else {
+            if (c > 36) borderLeft = "5px solid red";
+          }
+          return { color, borderLeft };
+        },
+        interpolateColor(c1, c2, f) {
+          let a = this.hexToRgb(c1), b = this.hexToRgb(c2);
+          let r = Math.round(a.r + (b.r - a.r) * f);
+          let g = Math.round(a.g + (b.g - a.g) * f);
+          let b3 = Math.round(a.b + (b.b - a.b) * f);
+          return `rgb(${r},${g},${b3})`;
+        },
+        hexToRgb(hex) {
+          hex = hex.replace(/^#/, "");
+          if (hex.length === 3) {
+            hex = hex.split("").map(c => c + c).join("");
+          }
+          let bigint = parseInt(hex, 16);
+          let r = (bigint >> 16) & 255, g = (bigint >> 8) & 255, b = bigint & 255;
+          return { r, g, b };
+        },
+        getSubtitleStyle(idx, d) {
+          if (this.currentSubtitles.length === 1) {
+            return {
+              position: 'absolute', left: '50%', top: '90%',
+              transform: 'translate(-50%,-50%)',
+              background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: '4px', zIndex: 1, whiteSpace: 'pre-line'
+            };
+          } else if (this.currentSubtitles.length === 2) {
+            if (idx === 0) {
+              return {
+                position: 'absolute', left: '50%', top: '85%',
+                transform: 'translate(-50%,-50%)',
+                background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: '4px', zIndex: 1, whiteSpace: 'pre-line'
+              };
+            } else {
+              return {
+                position: 'absolute', left: '50%', top: '95%',
+                transform: 'translate(-50%,-50%)',
+                background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: '4px', zIndex: 1, whiteSpace: 'pre-line'
+              };
+            }
+          } else {
+            return {
+              position: 'absolute', left: '50%', top: '90%',
+              transform: 'translate(-50%,-50%)',
+              background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: '4px', zIndex: 1, whiteSpace: 'pre-line'
+            };
+          }
+        },
+
+        // Suchen/Ersetzen
+        searchNext() {
+          if (!this.searchText) return;
+          let start = this.currentRowIndex || 0;
+          for (let i = start; i < this.dialogues.length; i++) {
+            if (this.dialogues[i].Text.includes(this.searchText)) {
+              this.currentRowIndex = i;
+              return;
+            }
+          }
+        },
+        replaceOne() {
+          if (!this.searchText) return;
+          let d = this.dialogues[this.currentRowIndex];
+          if (d && d.Text.includes(this.searchText)) {
+            d.Text = d.Text.replace(this.searchText, this.replaceText);
+          }
+        },
+        replaceAll() {
+          if (!this.searchText) return;
+          let count = 0;
+          this.dialogues.forEach(d => {
+            if (d.Text.includes(this.searchText)) {
+              d.Text = d.Text.replaceAll(this.searchText, this.replaceText);
+              count++;
+            }
+          });
+          alert(count + " Ersetzungen durchgeführt");
+        },
+        // Numpad 
+        handleKeyDown(e) {
+          let tag = document.activeElement.tagName;
+          if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+          let code = e.code;
+          switch (code) {
+            case "Numpad5": e.preventDefault(); this.playPause(); break;
+            case "Numpad2": e.preventDefault(); this.nextSubtitle(); break;
+            case "Numpad8": e.preventDefault(); this.previousSubtitle(); break;
+            case "Numpad4": e.preventDefault(); this.jumpToStartOfCurrentLine(); break;
+            case "Numpad6": e.preventDefault(); this.jumpToEndOfCurrentLine(); break;
+            case "Numpad1": e.preventDefault(); this.jumpSecondsBack(5); break;
+            case "Numpad3": e.preventDefault(); this.jumpSecondsForward(5); break;
+            case "Numpad7": e.preventDefault(); this.jumpSecondsBack(1); break;
+            case "Numpad9": e.preventDefault(); this.jumpSecondsForward(1); break;
+            case "NumpadAdd": e.preventDefault(); this.increasePlaybackRate(); break;
+            case "NumpadSubtract": e.preventDefault(); this.decreasePlaybackRate(); break;
+            case "Numpad0": e.preventDefault(); this.jumpToTextarea(); break;
+          }
+        },
+        nextSubtitle() {
+          if (!this.dialogues.length) return;
+          let ix = this.currentRowIndex !== null ? this.currentRowIndex + 1 : 0;
+          if (ix >= this.dialogues.length) ix = 0;
+          this.highlightRow(ix);
+        },
+        previousSubtitle() {
+          if (!this.dialogues.length) return;
+          let ix = this.currentRowIndex !== null ? this.currentRowIndex - 1 : 0;
+          if (ix < 0) ix = this.dialogues.length - 1;
+          this.highlightRow(ix);
+        },
+        jumpToStartOfCurrentLine() {
+          if (this.currentRowIndex !== null) {
+            this.jumpToTime(this.dialogues[this.currentRowIndex].Start);
+          }
+        },
+        jumpToEndOfCurrentLine() {
+          if (this.currentRowIndex !== null) {
+            this.jumpToTime(this.dialogues[this.currentRowIndex].End);
+          }
+        },
+        jumpSecondsBack(s) { this.seekMedia(-s); }
+        , jumpSecondsForward(s) { this.seekMedia(s); }
+        , increasePlaybackRate() {
+          let max = 2;
+          if (this.playbackRate < max) {
+            this.playbackRate = Math.min(this.playbackRate + 0.25, max);
+            this.changePlaybackRate();
+          }
+        }
+        , decreasePlaybackRate() {
+          let min = 0.25;
+          if (this.playbackRate > min) {
+            this.playbackRate = Math.max(this.playbackRate - 0.25, min);
+            this.changePlaybackRate();
+          }
+        },
+        jumpToTextarea() {
+          if (this.currentRowIndex === null) return alert("Keine Zeile selektiert");
+          this.$nextTick(() => {
+            let rows = this.$el.querySelectorAll("tbody tr");
+            if (rows[this.currentRowIndex]) {
+              let ta = rows[this.currentRowIndex].querySelector("textarea");
+              if (ta) ta.focus();
+            }
+          });
+        }
+      }
+    });
+  </script>
+
+</body>
+
+</html>
